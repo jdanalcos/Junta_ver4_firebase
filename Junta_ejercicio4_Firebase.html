@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Junta de Dirección - 17 de junio</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free/css/all.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <style>
+    body { padding: 20px; }
+    .table-container { max-height: 400px; overflow-y: auto; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1 class="mb-4">Junta de Dirección - 17 de junio</h1>
+
+    <div id="auth-section">
+      <div class="mb-3">
+        <input type="email" id="email" placeholder="Correo electrónico" class="form-control">
+      </div>
+      <div class="mb-3">
+        <input type="password" id="password" placeholder="Contraseña" class="form-control">
+      </div>
+      <button onclick="login()" class="btn btn-primary">Iniciar sesión</button>
+      <button onclick="logout()" class="btn btn-secondary d-none" id="logoutBtn">Cerrar sesión</button>
+    </div>
+
+    <div id="app-section" style="display:none;">
+      <form class="row g-3 mt-4" id="formCompromiso">
+        <input class="form-control" id="estado" placeholder="Estado">
+        <input class="form-control" id="region" placeholder="Región">
+        <input class="form-control" id="desarrollo" placeholder="Desarrollo">
+        <input class="form-control" id="tema" placeholder="Asunto o Tema">
+        <input class="form-control" id="responsable" placeholder="Responsable">
+        <input type="date" class="form-control" id="fecha">
+        <textarea class="form-control" id="observaciones" placeholder="Observaciones"></textarea>
+        <input class="form-control" id="etapa" placeholder="Etapa administrativa">
+        <input type="file" class="form-control" id="archivoAdjunto">
+        <button type="button" class="btn btn-success" onclick="guardarCompromiso()">Guardar Compromiso</button>
+      </form>
+
+      <div class="form-check mt-4">
+        <input class="form-check-input" type="checkbox" value="" id="mostrarCumplidos" onchange="cargarCompromisos()">
+        <label class="form-check-label" for="mostrarCumplidos">
+          Mostrar compromisos cumplidos
+        </label>
+      </div>
+
+      <div class="table-container mt-3">
+        <table class="table table-striped">
+          <thead>
+            <tr>
+              <th>Estado</th><th>Región</th><th>Desarrollo</th><th>Tema</th><th>Responsable</th>
+              <th>Fecha</th><th>Observaciones</th><th>Etapa</th><th>Archivo</th><th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="tabla-compromisos"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- Firebase SDK -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage.js"></script>
+  <script>
+    const firebaseConfig = {
+      apiKey: "AIzaSyAhzLE6-Aj2GuCEHoEDTzZogr8R-iMAPt8",
+      authDomain: "junta-17jun-v1.firebaseapp.com",
+      projectId: "junta-17jun-v1",
+      storageBucket: "junta-17jun-v1.appspot.com",
+      messagingSenderId: "857068470535",
+      appId: "1:857068470535:web:02faa7e055cca2cae405a2"
+    };
+
+    firebase.initializeApp(firebaseConfig);
+    const auth = firebase.auth();
+    const db = firebase.firestore();
+    const storage = firebase.storage();
+
+    auth.onAuthStateChanged(user => {
+      document.getElementById('auth-section').style.display = user ? 'none' : 'block';
+      document.getElementById('app-section').style.display = user ? 'block' : 'none';
+      document.getElementById('logoutBtn').classList.toggle('d-none', !user);
+      if (user) cargarCompromisos();
+    });
+
+    function login() {
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+
+      if (!email || !password) {
+        Swal.fire('Campo vacío', 'Debes ingresar correo y contraseña', 'warning');
+        return;
+      }
+
+      auth.signInWithEmailAndPassword(email, password)
+        .then(() => {
+          Swal.fire('Bienvenido', 'Sesión iniciada correctamente', 'success');
+        })
+        .catch(error => {
+          Swal.fire('Error de acceso', error.message, 'error');
+        });
+    }
+
+    function logout() {
+      auth.signOut();
+    }
+
+    async function guardarCompromiso() {
+      const file = document.getElementById('archivoAdjunto').files[0];
+      let fileUrl = '';
+      if (file) {
+        const storageRef = storage.ref(`junta_17junio/${file.name}`);
+        await storageRef.put(file);
+        fileUrl = await storageRef.getDownloadURL();
+      }
+
+      const data = {
+        estado: estado.value,
+        region: region.value,
+        desarrollo: desarrollo.value,
+        tema: tema.value,
+        responsable: responsable.value,
+        fechaCompromiso: fecha.value,
+        observaciones: observaciones.value,
+        etapa: etapa.value,
+        archivoUrl: fileUrl,
+        cumplido: false,
+        timestamp: new Date()
+      };
+      db.collection("compromisos_junta_17junio").add(data).then(() => {
+        Swal.fire('Guardado', 'Compromiso registrado', 'success');
+        formCompromiso.reset();
+        cargarCompromisos();
+      });
+    }
+
+    function cargarCompromisos() {
+      const mostrarCumplidos = document.getElementById('mostrarCumplidos').checked;
+      db.collection("compromisos_junta_17junio")
+        .where("cumplido", "==", mostrarCumplidos)
+        .orderBy("timestamp", "desc")
+        .onSnapshot(snapshot => {
+          const tabla = document.getElementById("tabla-compromisos");
+          tabla.innerHTML = "";
+          snapshot.forEach(doc => {
+            const d = doc.data();
+            tabla.innerHTML += `
+              <tr>
+                <td>${d.estado}</td><td>${d.region}</td><td>${d.desarrollo}</td><td>${d.tema}</td>
+                <td>${d.responsable}</td><td>${d.fechaCompromiso}</td><td>${d.observaciones}</td><td>${d.etapa}</td>
+                <td>${d.archivoUrl ? `<a href="${d.archivoUrl}" target="_blank">Ver</a>` : '—'}</td>
+                <td><button class="btn btn-sm btn-outline-success" onclick="marcarCumplido('${doc.id}')">✔</button></td>
+              </tr>`;
+          });
+        });
+    }
+
+    function marcarCumplido(id) {
+      db.collection("compromisos_junta_17junio").doc(id).update({ cumplido: true });
+    }
+  </script>
+</body>
+</html>
